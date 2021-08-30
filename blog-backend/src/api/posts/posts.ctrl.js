@@ -1,4 +1,4 @@
-import Post from '../../modules/post';
+import Post from '../../models/post';
 import mongoose from 'mongoose';
 import Joi from 'joi';
 
@@ -55,9 +55,30 @@ export const write = async (ctx) => {
 GET /api/posts
 */
 export const list = async (ctx) => {
+  //query는 문자열이라 숫자로 변환해 주어야 한다
+  // 값이 주어지지 않았다면 1이 default 값
+  const page = parseInt(ctx.query.page || '1', 10);
+
+  if (page < 1) {
+    ctx.status = 400;
+    return;
+  }
+
   try {
-    const posts = await Post.find().exec(); // 모델 인스턴스의 find() => 데이터 조회
-    ctx.body = posts;
+    const posts = await Post.find()
+      .sort({ _id: -1 })
+      .limit(10)
+      .skip((page - 1) * 10)
+      .lean()
+      .exec(); // 모델 인스턴스의 find() => 데이터 조회
+
+    const postCount = await Post.countDocuments().exec();
+    ctx.set('Last-page', Math.ceil(postCount / 10));
+    ctx.body = posts.map((post) => ({
+      ...post,
+      body:
+        post.body.length < 200 ? post.body : `${post.body.slice(0, 200)}...`, // 내용 길이 제한
+    }));
   } catch (e) {
     ctx.throw(500, e);
   }
